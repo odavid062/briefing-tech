@@ -4,13 +4,23 @@ Bot que todo dia às 8h coleta notícias de tecnologia via RSS, gera um roteiro 
 
 **Pipeline:** `cron → RSS → gpt-4o-mini → edge-tts → ffmpeg (opus) → Evolution API → WhatsApp`
 
+### Stack
+
+- **Linguagem & Runtime:** Python 3.12
+- **Coleta RSS:** `feedparser`
+- **Roteirização & Digest:** OpenAI API (`gpt-4o-mini`) via `requests`
+- **Síntese de Voz:** `edge-tts` (Microsoft Edge TTS)
+- **Áudio & Codec:** `ffmpeg` (`loudnorm`, codificação OGG Opus mono 48 kHz para mensagem de voz WhatsApp)
+- **Envio WhatsApp:** Evolution API v2 (`message/sendWhatsAppAudio` e `message/sendText`)
+- **Containerização:** Docker
+
 ---
 
 ## Setup
 
 ### 1. Pré-requisitos
 
-- Docker instalado na máquina/VPS
+- Docker instalado na máquina/VPS (recomendado) ou Python 3.12+ com `ffmpeg` para execução local
 - Evolution API v2 rodando com uma instância conectada ao WhatsApp
 - Chave de API da OpenAI
 
@@ -44,6 +54,25 @@ docker run --rm --env-file .env briefing-tech
 ```
 
 O áudio deve chegar como mensagem de voz seguido do digest em texto.
+
+### 5. Execução local (sem Docker)
+
+Caso prefira executar diretamente na máquina sem container:
+
+1. Certifique-se de ter o `ffmpeg` instalado e acessível no `PATH`.
+2. Crie e ative um ambiente virtual:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # No Windows: .venv\Scripts\activate
+   ```
+3. Instale as dependências:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Execute o script com as variáveis configuradas no `.env`:
+   ```bash
+   python briefing.py
+   ```
 
 ---
 
@@ -92,6 +121,28 @@ docker run --rm \
   briefing-tech
 ```
 
+Feeds padrão utilizados quando `FEEDS` não é configurada:
+- `https://hnrss.org/frontpage` (Hacker News)
+- `https://techcrunch.com/feed/` (TechCrunch)
+- `https://www.theverge.com/rss/index.xml` (The Verge)
+- `https://feeds.arstechnica.com/arstechnica/index` (Ars Technica)
+- `https://tecnoblog.net/feed/` (Tecnoblog)
+- `https://canaltech.com.br/rss/` (Canaltech)
+
+---
+
+## Estrutura do Projeto
+
+```text
+.
+├── briefing.py       # Script principal (coleta RSS, prompt/LLM, TTS, conversão ffmpeg e envio WhatsApp)
+├── Dockerfile        # Imagem Docker baseada em python:3.12-slim com ffmpeg e tzdata
+├── requirements.txt  # Dependências Python (feedparser, edge-tts, requests, python-dotenv)
+├── .env.example      # Modelo com variáveis de ambiente necessárias e opcionais
+├── .gitignore        # Arquivos ignorados pelo Git (.env, caches, áudios, etc.)
+└── README.md         # Documentação do projeto
+```
+
 ---
 
 ## Troubleshooting
@@ -135,11 +186,16 @@ Confirme que a imagem foi construída com `TZ=America/Sao_Paulo` (já no Dockerf
 docker run --rm briefing-tech python -c "from datetime import datetime; print(datetime.now())"
 ```
 
+### Notificação automática de falha
+
+Em caso de exceção durante a execução, o bloco `if __name__ == "__main__":` do script tenta enviar automaticamente um alerta via Evolution API (`message/sendText`) para o número configurado:
+`⚠️ Briefing de hoje falhou: <mensagem de erro>`
+
 ---
 
 ## TODO — Backlog v2
 
-- [ ] Vinheta de abertura (variável `VINHETA` já prevista no código)
+- [x] Vinheta de abertura (suporte implementado via variável `VINHETA` e mesclagem/normalização no `ffmpeg`)
 - [ ] Envio para grupo/canal do WhatsApp → briefing vira produto de audiência
 - [ ] Score de relevância por fonte (priorizar sinal alto, despriorizar ruído)
 - [ ] Edição de sexta: retrospectiva da semana em vez do diário
